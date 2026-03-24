@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time EEG seizure detection system using EMD and CEEMDAN decomposition with SVM classification">
+    <title>NeuroSense — Real-Time Seizure Detection</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+    <!-- ═══════════ HEADER ═══════════ -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">🧠</div>
+            <div>
+                <div class="header-title">NeuroSense</div>
+                <div class="header-subtitle">Real-Time EEG Seizure Detection — EMD vs CEEMDAN</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="status-indicator">
+                <div class="status-dot ready" id="status-dot"></div>
+                <span id="status-text">System Ready</span>
+            </div>
+            <span class="clock" id="clock">00:00:00</span>
+        </div>
+    </header>
+
+    <!-- ═══════════ MAIN GRID ═══════════ -->
+    <main class="main">
+
+        <!-- ══════ LEFT PANEL — INPUT ══════ -->
+        <aside class="input-panel">
+
+            <!-- Manual Input -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">📡</span> EEG Input
+                </div>
+                <textarea class="eeg-textarea" id="eeg-input"
+                    placeholder="Paste comma-separated EEG values here...&#10;e.g. 12.3, -4.5, 8.1, 15.7, -2.3, ...&#10;&#10;(100 samples recommended, min 10)"></textarea>
+                <div class="btn-group" style="margin-top:0.6rem;">
+                    <button class="btn btn-primary" id="btn-analyze">
+                        <span class="btn-icon">⚡</span> Analyze
+                    </button>
+                    <button class="btn btn-danger" id="btn-clear">
+                        <span class="btn-icon">🗑</span> Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">🔄</span> Real-Time Simulation
+                </div>
+                <div class="sim-controls">
+                    <select class="sim-select" id="condition-select">
+                        <option value="-1">🎲 Random Conditions</option>
+                        <option value="0">🟢 Normal (Eyes Open)</option>
+                        <option value="1">🔵 Normal (Eyes Closed)</option>
+                        <option value="2">🟡 Pre-ictal / Interictal</option>
+                        <option value="3">🔴 Ictal (Seizure)</option>
+                    </select>
+                    <button class="btn btn-primary" id="btn-simulate" style="width:100%;">
+                        <span class="btn-icon">▶</span> Start Simulation
+                    </button>
+                </div>
+            </div>
+
+            <!-- File Upload -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">📁</span> Upload CSV
+                </div>
+                <div class="drop-zone" id="drop-zone">
+                    <div class="drop-icon">📂</div>
+                    <div>Drop CSV file here or click to browse</div>
+                </div>
+                <input type="file" id="file-input" accept=".csv,.txt" style="display:none;">
+            </div>
+
+            <!-- Quick Samples -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">🧪</span> Quick Test Samples
+                </div>
+                <div class="sample-grid">
+                    <button class="sample-btn" data-condition="0">
+                        <span class="sample-icon">🟢</span>
+                        Normal EO
+                    </button>
+                    <button class="sample-btn" data-condition="1">
+                        <span class="sample-icon">🔵</span>
+                        Normal EC
+                    </button>
+                    <button class="sample-btn" data-condition="2">
+                        <span class="sample-icon">🟡</span>
+                        Pre-ictal
+                    </button>
+                    <button class="sample-btn" data-condition="3">
+                        <span class="sample-icon">🔴</span>
+                        Seizure
+                    </button>
+                </div>
+            </div>
+
+            <!-- Computation Timing -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">⏱</span> Processing Time
+                </div>
+                <div class="timing-grid">
+                    <div class="timing-item">
+                        <div class="timing-label">EMD</div>
+                        <div class="timing-value emd" id="emd-time">— ms</div>
+                    </div>
+                    <div class="timing-item">
+                        <div class="timing-label">CEEMDAN</div>
+                        <div class="timing-value ceemdan" id="ceemdan-time">— ms</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ══════ CENTER — SIGNAL & IMFs ══════ -->
+        <section class="center-panel">
+
+            <!-- Signal Chart -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">📈</span> EEG Signal Waveform
+                </div>
+                <div class="signal-chart-wrapper">
+                    <canvas id="signal-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- IMF Decomposition -->
+            <div class="imf-grid">
+                <div class="card imf-column">
+                    <div class="card-title">
+                        <span class="method-badge emd">EMD</span>
+                        IMF Decomposition
+                    </div>
+                    <div class="imf-charts-container" id="imf-emd-container"></div>
+                </div>
+                <div class="card imf-column">
+                    <div class="card-title">
+                        <span class="method-badge ceemdan">CEEMDAN</span>
+                        IMF Decomposition
+                    </div>
+                    <div class="imf-charts-container" id="imf-ceemdan-container"></div>
+                </div>
+            </div>
+
+            <!-- Method Comparison Radar -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">📊</span> Method Comparison
+                </div>
+                <div class="comparison-chart-wrapper">
+                    <canvas id="comparison-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════ RIGHT PANEL — RESULTS ══════ -->
+        <aside class="right-panel">
+
+            <!-- Main Classification Result -->
+            <div class="result-card card" id="result-card">
+                <div class="result-icon" id="result-icon">⏳</div>
+                <div class="result-name" id="result-name">Awaiting Input</div>
+                <div class="result-desc" id="result-desc">
+                    Enter EEG data or start simulation to begin analysis
+                </div>
+                <div class="confidence-label">CEEMDAN Confidence</div>
+                <div class="result-confidence" id="result-confidence">—</div>
+                <div class="confidence-bar">
+                    <div class="confidence-bar-fill" id="confidence-bar-fill"></div>
+                </div>
+                <div class="method-results">
+                    <div>
+                        <div class="method-result-label">EMD</div>
+                        <div class="method-result-badge" id="emd-result-badge">—</div>
+                    </div>
+                    <div>
+                        <div class="method-result-label">CEEMDAN</div>
+                        <div class="method-result-badge" id="ceemdan-result-badge">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Confidence Distribution -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">🎯</span> Class Scores
+                </div>
+                <div class="confidence-chart-wrapper">
+                    <canvas id="confidence-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Feature Stats -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">🔬</span> Feature Statistics
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Energy</div>
+                        <div class="stat-value" id="stat-energy">—</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Kurtosis</div>
+                        <div class="stat-value" id="stat-kurtosis">—</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Entropy</div>
+                        <div class="stat-value" id="stat-entropy">—</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">RMS</div>
+                        <div class="stat-value" id="stat-rms">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="title-icon">📋</span> Detection History
+                </div>
+                <div class="history-list" id="history-list">
+                    <div class="history-empty">No analyses yet</div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/emd.js"></script>
+    <script src="js/features.js"></script>
+    <script src="js/classifier.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
