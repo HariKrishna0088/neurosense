@@ -19,14 +19,14 @@ const App = (() => {
         ChartManager.initComparisonChart('comparison-chart');
 
         // Event listeners
-        document.getElementById('btn-analyze').addEventListener('click', analyzeManual);
+        document.getElementById('btn-analyze').addEventListener('click', () => analyzeManual(false));
         document.getElementById('btn-simulate').addEventListener('click', toggleSimulation);
         document.getElementById('btn-clear').addEventListener('click', clearAll);
         document.getElementById('condition-select').addEventListener('change', (e) => {
             currentCondition = parseInt(e.target.value);
         });
 
-        // File upload
+        // File upload (removed for brevity, it's lines 29-46, keep them as is)
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
 
@@ -52,7 +52,7 @@ const App = (() => {
                 const channels = Classifier.generateSignal(cond, EPOCH_LENGTH, NUM_CHANNELS);
                 const signalStr = channels[0].map(v => v.toFixed(2)).join(', ');
                 document.getElementById('eeg-input').value = signalStr;
-                analyzeManual();
+                analyzeManual(true);
             });
         });
 
@@ -61,7 +61,8 @@ const App = (() => {
         setStatus('ready', 'System Ready');
     }
 
-    function analyzeManual() {
+    function analyzeManual(isSynthetic = false) {
+        Classifier.isSynthetic = isSynthetic;
         const input = document.getElementById('eeg-input').value.trim();
         if (!input) {
             showToast('Please enter EEG values or use a sample', 'warning');
@@ -167,6 +168,7 @@ const App = (() => {
         }
 
         const channels = Classifier.generateSignal(cond, EPOCH_LENGTH, NUM_CHANNELS);
+        Classifier.isSynthetic = true;
         processSignal(channels);
     }
 

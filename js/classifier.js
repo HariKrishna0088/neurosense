@@ -115,7 +115,60 @@ const Classifier = (() => {
         const hfKurtAvg = hfCount > 0 ? hfKurtosis / hfCount : 0;
         const hfRatio = lfEnergyAvg > 0 ? hfEnergyAvg / lfEnergyAvg : 1;
 
-        // ── Scoring for each condition ──────────────────────────────
+        // ── Machine Learning Inference (Offline Trained Neural Network) ── //
+        if (typeof NN_MODEL !== 'undefined' && !Classifier.isSynthetic && features.length === 40) {
+            // 1. Normalize
+            let x = new Array(40);
+            for(let i=0; i<40; i++) x[i] = (features[i] - NN_MODEL.mean[i]) / NN_MODEL.scale[i];
+
+            // 2. Hidden Layer 1 (ReLU)
+            let h1 = new Array(NN_MODEL.b1.length);
+            for(let i=0; i<h1.length; i++) {
+                let sum = NN_MODEL.b1[i];
+                for(let j=0; j<40; j++) sum += x[j] * NN_MODEL.w1[j][i];
+                h1[i] = sum > 0 ? sum : 0;
+            }
+
+            // 3. Hidden Layer 2 (ReLU)
+            let h2 = new Array(NN_MODEL.b2.length);
+            for(let i=0; i<h2.length; i++) {
+                let sum = NN_MODEL.b2[i];
+                for(let j=0; j<h1.length; j++) sum += h1[j] * NN_MODEL.w2[j][i];
+                h2[i] = sum > 0 ? sum : 0;
+            }
+
+            // 4. Output Layer
+            let out = new Array(NN_MODEL.b3.length);
+            for(let i=0; i<out.length; i++) {
+                let sum = NN_MODEL.b3[i];
+                for(let j=0; j<h2.length; j++) sum += h2[j] * NN_MODEL.w3[j][i];
+                out[i] = sum;
+            }
+
+            // 5. Softmax to Confidence
+            let maxVal = Math.max(...out);
+            let exps = out.map(v => Math.exp(v - maxVal));
+            let sumExps = exps.reduce((a,b) => a+b, 0);
+            let probs = out.map(v => v / sumExps);
+
+            let maxIdx = 0;
+            let pMax = probs[0];
+            for(let i=1; i<probs.length; i++){
+                if(probs[i] > pMax) { pMax = probs[i]; maxIdx = i; }
+            }
+
+            return {
+                condition: CONDITIONS[NN_MODEL.classes[maxIdx]],
+                confidence: Math.round(pMax * 1000) / 10,
+                scores: probs.map(s => Math.round(s * 1000) / 10),
+                featureStats: {
+                    avgEnergy, avgVariance, avgKurtosis,
+                    avgEntropy, avgRMS, avgAlpha, hfRatio
+                }
+            };
+        }
+
+        // ── Fallback Scoring (Demo Heuristic) ──────────────────────────────
         const scores = [0, 0, 0, 0];
         
         // Use RMS and Variance as primary robust separators for the web demo
