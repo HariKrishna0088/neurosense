@@ -7,6 +7,7 @@
     <title>NeuroSense — Real-Time Seizure Detection</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -73,13 +74,13 @@
             <!-- File Upload -->
             <div class="card">
                 <div class="card-title">
-                    <span class="title-icon">📁</span> Upload CSV
+                    <span class="title-icon">📁</span> Upload Data
                 </div>
                 <div class="drop-zone" id="drop-zone">
                     <div class="drop-icon">📂</div>
-                    <div>Drop CSV file here or click to browse</div>
+                    <div>Drop CSV / Excel file here or click to browse</div>
                 </div>
-                <input type="file" id="file-input" accept=".csv,.txt" style="display:none;">
+                <input type="file" id="file-input" accept=".csv,.txt,.xlsx,.xls" style="display:none;">
             </div>
 
             <!-- Quick Samples -->

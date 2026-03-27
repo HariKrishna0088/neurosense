@@ -233,21 +233,141 @@ const App = (() => {
     }
 
     function handleFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const text = e.target.result;
-            const lines = text.trim().split('\n');
-            // Take first line as signal
-            const values = lines[0].split(',').map(v => parseFloat(v.trim())).filter(v => isFinite(v));
-            if (values.length >= 10) {
-                document.getElementById('eeg-input').value = values.slice(0, EPOCH_LENGTH).map(v => v.toFixed(2)).join(', ');
-                analyzeManual();
-                showToast(`Loaded ${values.length} samples from ${file.name}`, 'success');
+        const ext = file.name.split('.').pop().toLowerCase();
+        const isExcel = (ext === 'xlsx' || ext === 'xls');
+
+        if (isExcel) {
+            // Read Excel files using SheetJS
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    const values = extractNumericValues(rows);
+
+                    if (values.length >= 10) {
+                        document.getElementById('eeg-input').value = values.slice(0, EPOCH_LENGTH).map(v => v.toFixed(2)).join(', ');
+                        analyzeManual();
+                        showToast(`Loaded ${Math.min(values.length, EPOCH_LENGTH)} samples from ${file.name} (Excel)`, 'success');
+                    } else {
+                        showToast(`Could not find enough numeric data in ${file.name}. Found ${values.length} values (need ≥10).`, 'warning');
+                    }
+                } catch (err) {
+                    showToast(`Error reading Excel file: ${err.message}`, 'warning');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            // Read CSV/TXT files as text
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+                if (lines.length === 0) {
+                    showToast('File is empty', 'warning');
+                    return;
+                }
+
+                // Detect delimiter
+                const firstLine = lines[0];
+                let delimiter = ',';
+                if (firstLine.includes('\t') && !firstLine.includes(',')) delimiter = '\t';
+                else if (firstLine.includes(';') && !firstLine.includes(',')) delimiter = ';';
+
+                // Convert to 2D array (same format as Excel rows)
+                const rows = lines.map(line => line.split(delimiter).map(v => {
+                    const num = parseFloat(v.trim());
+                    return isFinite(num) ? num : v.trim();
+                }));
+
+                const values = extractNumericValues(rows);
+
+                if (values.length >= 10) {
+                    document.getElementById('eeg-input').value = values.slice(0, EPOCH_LENGTH).map(v => v.toFixed(2)).join(', ');
+                    analyzeManual();
+                    showToast(`Loaded ${Math.min(values.length, EPOCH_LENGTH)} samples from ${file.name}`, 'success');
+                } else {
+                    showToast(`Could not find enough numeric data in ${file.name}. Found ${values.length} values (need ≥10).`, 'warning');
+                }
+            };
+            reader.readAsText(file);
+        }
+    }
+
+    /**
+     * Extract numeric values from a 2D array of rows (works for both Excel and CSV).
+     * Handles: single-row signals, multi-column with headers, single-column data.
+     */
+    function extractNumericValues(rows) {
+        if (!rows || rows.length === 0) return [];
+
+        // Strategy 1: First row is all/mostly numbers (single-row signal)
+        const firstRow = rows[0];
+        if (Array.isArray(firstRow)) {
+            const numericVals = firstRow.filter(v => typeof v === 'number' && isFinite(v));
+            if (numericVals.length >= 10) return numericVals;
+        }
+
+        // Strategy 2: Multi-row — skip header rows, find best numeric column
+        let startRow = 0;
+        for (let i = 0; i < Math.min(3, rows.length); i++) {
+            const row = rows[i];
+            if (!Array.isArray(row)) continue;
+            const numCount = row.filter(v => typeof v === 'number' && isFinite(v)).length;
+            if (numCount < row.length * 0.5) {
+                startRow = i + 1;
             } else {
-                showToast('File must contain comma-separated numeric values', 'warning');
+                break;
             }
-        };
-        reader.readAsText(file);
+        }
+
+        const sampleRow = rows[Math.min(startRow, rows.length - 1)];
+        if (!Array.isArray(sampleRow)) return [];
+
+        if (sampleRow.length === 1) {
+            // Single column
+            const values = [];
+            for (let i = startRow; i < rows.length; i++) {
+                const v = rows[i][0];
+                if (typeof v === 'number' && isFinite(v)) values.push(v);
+            }
+            return values;
+        }
+
+        // Multi-column: find the column with most numeric values
+        const numCols = sampleRow.length;
+        let bestCol = -1;
+        let bestCount = 0;
+
+        for (let col = 0; col < numCols; col++) {
+            let count = 0;
+            for (let i = startRow; i < Math.min(startRow + 20, rows.length); i++) {
+                if (Array.isArray(rows[i]) && col < rows[i].length) {
+                    const v = rows[i][col];
+                    if (typeof v === 'number' && isFinite(v)) count++;
+                }
+            }
+            if (count > bestCount) {
+                bestCount = count;
+                bestCol = col;
+            }
+        }
+
+        if (bestCol < 0) return [];
+
+        const values = [];
+        for (let i = startRow; i < rows.length; i++) {
+            if (Array.isArray(rows[i]) && bestCol < rows[i].length) {
+                const v = rows[i][bestCol];
+                if (typeof v === 'number' && isFinite(v)) values.push(v);
+            }
+        }
+        return values;
     }
 
     function clearAll() {
