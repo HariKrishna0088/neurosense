@@ -117,34 +117,27 @@ const Classifier = (() => {
 
         // ── Scoring for each condition ──────────────────────────────
         const scores = [0, 0, 0, 0];
+        
+        // Use RMS and Variance as primary robust separators for the web demo
+        const rmv = avgRMS;
+        const vr = avgVariance;
 
-        // Class 0: Normal Eyes Open — low energy, low kurtosis, high entropy, low RMS
-        scores[0] += sigmoid(1.0 - avgEnergy / 500) * 25;
-        scores[0] += sigmoid(3.5 - avgKurtosis) * 20;
-        scores[0] += sigmoid(avgEntropy / 2.5 - 0.5) * 20;
-        scores[0] += sigmoid(0.8 - avgRMS / 10) * 15;
-        scores[0] += sigmoid(1.0 - hfRatio) * 20;
+        // Class 0: Normal Eyes Open — low amplitude (RMS < 1.8)
+        scores[0] += sigmoid(1.8 - rmv) * 100;
 
-        // Class 1: Normal Eyes Closed — moderate energy, strong alpha (NIG alpha high)
-        scores[1] += sigmoid(avgAlpha / 10 - 0.3) * 25;
-        scores[1] += sigmoid(avgEnergy / 300 - 0.2) * 20;
-        scores[1] += sigmoid(3.8 - avgKurtosis) * 15;
-        scores[1] += sigmoid(avgEntropy / 2.8 - 0.3) * 20;
-        scores[1] += sigmoid(avgRMS / 8 - 0.2) * 20;
+        // Class 1: Normal Eyes Closed — moderate amplitude, steady variance (EC Var ~24)
+        scores[1] += sigmoid(rmv - 1.8) * 35;
+        scores[1] += sigmoid(2.6 - rmv) * 35;
+        scores[1] += sigmoid(vr - 21.0) * 30; 
 
-        // Class 2: Pre-ictal — rising HF energy, moderate kurtosis, lowering entropy
-        scores[2] += sigmoid(hfRatio - 0.8) * 25;
-        scores[2] += sigmoid(avgKurtosis / 5 - 0.4) * 25;
-        scores[2] += sigmoid(1.2 - avgEntropy / 2.5) * 20;
-        scores[2] += sigmoid(avgEnergy / 400 - 0.3) * 15;
-        scores[2] += sigmoid(avgSkewness / 2 - 0.2) * 15;
+        // Class 2: Pre-ictal — moderate/high amplitude, lower steady variance due to spikes (Pre Var ~18)
+        scores[2] += sigmoid(rmv - 2.2) * 35;
+        scores[2] += sigmoid(4.5 - rmv) * 35;
+        scores[2] += sigmoid(21.0 - vr) * 30;
 
-        // Class 3: Ictal (Seizure) — very high energy, high kurtosis, low entropy, high RMS
-        scores[3] += sigmoid(avgEnergy / 200 - 1.0) * 25;
-        scores[3] += sigmoid(avgKurtosis / 4 - 0.8) * 25;
-        scores[3] += sigmoid(1.5 - avgEntropy / 2) * 20;
-        scores[3] += sigmoid(avgRMS / 5 - 0.5) * 15;
-        scores[3] += sigmoid(hfKurtAvg / 5 - 0.5) * 15;
+        // Class 3: Ictal (Seizure) — huge amplitude and variance (RMS > 4.5)
+        scores[3] += sigmoid(rmv - 4.5) * 50;
+        scores[3] += sigmoid(vr - 40.0) * 50;
 
         // CEEMDAN bonus: boost scores slightly due to cleaner decomposition
         const methodBoost = method === 'ceemdan' ? 1.08 : 1.0;
